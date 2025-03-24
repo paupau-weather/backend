@@ -1,30 +1,61 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"net"
-	"database/sql"
+	"os"
 
-	_ "github.com/lib/pq" // Импортируем драйвер PostgreSQL
+	"github.com/joho/godotenv" // Импортируем пакет для работы с .env файлами
+	_ "github.com/lib/pq"      // Импортируем драйвер PostgreSQL
 )
 
-const (
-	host     = "localhost"
- 	port     = 5432
- 	user     = "postgres"
- 	password = "1234"
- 	dbname   = "HomeStation"
-)
+// init() вызывается до main()
+func init() {
+	// Загружаем значения из .env в систему
+	if err := godotenv.Load(); err != nil {
+		fmt.Print("No .env file found")
+	}
+}
+
+func getPsqlInfo() string {
+	dbAddress, dbAddressExists := os.LookupEnv("DB_ADDRESS")
+	dbPort, dbPortExists := os.LookupEnv("DB_PORT")
+	dbUser, dbUserExists := os.LookupEnv("DB_USER")
+	dbPassword, dbPasswordExists := os.LookupEnv("DB_PASSWORD")
+	dbName, dbNameExists := os.LookupEnv("DB_NAME")
+
+	if !dbAddressExists || !dbPortExists || !dbUserExists || !dbPasswordExists || !dbNameExists {
+		fmt.Println("Error: .env file is not correct")
+		os.Exit(1)
+	}
+
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", dbAddress, dbPort, dbUser, dbPassword, dbName)
+	return psqlInfo
+}
+
+func getListenerInfo() string {
+	listenerAddress, listenerAddressExists := os.LookupEnv("LISTENER_ADDRESS")
+	listenerPort, listenerPortExists := os.LookupEnv("LISTENER_PORT")
+
+	if !listenerAddressExists || !listenerPortExists {
+		fmt.Println("Error: .env file is not correct")
+		os.Exit(1)
+	}
+
+	listenerInfo := fmt.Sprintf("%s:%s", listenerAddress, listenerPort)
+	return listenerInfo
+}
 
 func main() {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
+	psqlInfo := getPsqlInfo()
 
 	db, err := sql.Open("postgres", psqlInfo)
-		if err != nil {
-			fmt.Println("Error open: ", err)
-			db.Close()
-		}
+	if err != nil {
+		fmt.Println("Error open: ", err)
+		db.Close()
+	}
 	defer db.Close()
 
 	err = db.Ping()
@@ -32,7 +63,8 @@ func main() {
 		fmt.Println("Error ping: ", err)
 	}
 
-	listener, err := net.Listen("tcp", "192.168.0.100:8080")
+	listenerInfo := getListenerInfo()
+	listener, err := net.Listen("tcp", listenerInfo)
 
 	if err != nil {
 		fmt.Println(err)
